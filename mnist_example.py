@@ -61,8 +61,8 @@ for f in [opt.outf, opt.outl, opt.outm]:
         os.makedirs(os.path.join(opt.outd, f))
 
 # Model creation and init
-G = Generator(maxRes=3, nch=opt.nch, bias=opt.bias, BN=opt.BN, ws=opt.WS, pn=opt.PN)
-D = Discriminator(maxRes=3, nch=opt.nch, bias=opt.bias, BN=opt.BN, ws=opt.WS)
+G = Generator(maxRes=3, nch=opt.nch, nc=1, bias=opt.bias, BN=opt.BN, ws=opt.WS, pn=opt.PN)
+D = Discriminator(maxRes=3, nch=opt.nch, nc=1, bias=opt.bias, BN=opt.BN, ws=opt.WS)
 if not opt.WS:
     # weights are initialized by WScale layers to normal if WS is used
     G.apply(weights_init)
