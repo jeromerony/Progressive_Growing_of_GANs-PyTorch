@@ -6,7 +6,7 @@ from layers import *
 
 
 class Generator(nn.Module):
-    def __init__(self, maxRes=3, nch=16, nc=1, bias=False, BN=False, ws=False, pn=False, activ=nn.LeakyReLU(0.2)):
+    def __init__(self, maxRes=8, nch=16, nc=3, bias=False, BN=False, ws=False, pn=False, activ=nn.LeakyReLU(0.2)):
         super(Generator, self).__init__()
         # resolution of output as 4 * 2^maxRes: 0 -> 4x4, 1 -> 8x8, ..., 8 -> 1024x1024
         self.maxRes = maxRes
@@ -72,7 +72,7 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, maxRes=3, nch=16, nc=1, bias=False, BN=False, ws=False, activ=nn.LeakyReLU(0.2)):
+    def __init__(self, maxRes=8, nch=16, nc=3, bias=False, BN=False, ws=False, activ=nn.LeakyReLU(0.2)):
         super(Discriminator, self).__init__()
         # resolution of output as 4 * 2^maxRes: 0 -> 4x4, 1 -> 8x8, ..., 8 -> 1024x1024
         self.maxRes = maxRes
@@ -141,9 +141,9 @@ if __name__ == '__main__':
 
     # test in original configuration
     nch = 16
-    G = Generator(maxRes=8, nch=nch, bias=True, ws=True, pn=True)
+    G = Generator(nch=nch, bias=True, ws=True, pn=True)
     print(G)
-    D = Discriminator(maxRes=8, nch=nch, bias=True, ws=True)
+    D = Discriminator(nch=nch, bias=True, ws=True)
     print(D)
     G.cuda()
     D.cuda()
