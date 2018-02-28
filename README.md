@@ -9,7 +9,7 @@ A simple PyTorch implementation of "Progressive Growing of GANs for Improved Qua
 I tried to follow the original article as much as possible.
 This repo gives a simple example of how it can be used on MNIST.
 
-This implementation was done in **Python 3.6** and uses f-string so this will create and error in previous Python versions.
+This implementation was done in **Python 3.6** and uses f-string so this will create an error in previous Python versions.
 
 ## Acknowledgement
 - https://github.com/tkarras/progressive_growing_of_gans/
