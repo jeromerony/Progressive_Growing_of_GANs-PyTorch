@@ -24,6 +24,11 @@ def hypersphere(z, radius=1):
     return z * radius / z.norm(p=2, dim=1, keepdim=True)
 
 
+def exp_mov_avg(Gs, G, alpha=0.999):
+    for state in G.state_dict().keys():
+        Gs.state_dict()[state].copy_((1 - alpha) * G.state_dict()[state] + alpha * Gs.state_dict()[state])
+
+
 class Progress:
     """Determine the progress parameter of the training given the epoch and the progression in the epoch
     Args:
@@ -81,11 +86,13 @@ class GradientPenalty:
     Args:
         batchSize (int): batch-size used in the training. Must be updated w.r.t the current batchsize
         lambdaGP (float): coefficient of the gradient penalty as defined in the article
+        gamma (float): regularization term of the gradient penalty, augment to minimize "ghosts"
     """
 
-    def __init__(self, batchSize, lambdaGP):
+    def __init__(self, batchSize, lambdaGP, gamma=1):
         self.batchSize = batchSize
         self.lambdaGP = lambdaGP
+        self.gamma = gamma
 
     def __call__(self, netD, real_data, fake_data, progress):
         alpha = torch.rand(self.batchSize, 1, 1, 1).cuda()
@@ -98,6 +105,6 @@ class GradientPenalty:
         gradients = grad(outputs=disc_interpolates, inputs=interpolates,
                          grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
                          create_graph=True, retain_graph=True, only_inputs=True)[0]
-        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * self.lambdaGP
+        gradient_penalty = (((gradients.norm(2, dim=1) - self.gamma) / self.gamma) ** 2).mean() * self.lambdaGP
 
         return gradient_penalty

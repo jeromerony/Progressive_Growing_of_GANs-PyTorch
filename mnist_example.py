@@ -1,6 +1,6 @@
 import argparse
 import os
-
+import copy
 import matplotlib
 
 matplotlib.use('agg')
@@ -36,6 +36,7 @@ parser.add_argument('--bias', action='store_true', help='use bias in G and D')
 
 parser.add_argument('--n_iter', type=int, default=10, help='number of epochs to train before changing the progress')
 parser.add_argument('--lambdaGP', type=float, default=10, help='lambda for gradient penalty')
+parser.add_argument('--gamma', type=float, default=1, help='gamma for gradient penalty')
 parser.add_argument('--n_critic', type=int, default=1, help='number of iterations to train D without training G')
 parser.add_argument('--e_drift', type=float, default=0.001, help='epsilon drift for discriminator loss')
 parser.add_argument('--saveiter', type=int, default=5, help='number of iterations before saving image examples')
@@ -70,11 +71,12 @@ if not opt.WS:
 if torch.cuda.is_available():
     G.cuda()
     D.cuda()
+Gs = copy.deepcopy(G)
 
 optimizerG = Adam(G.parameters(), lr=1e-3, betas=(0, 0.99))
 optimizerD = Adam(D.parameters(), lr=1e-3, betas=(0, 0.99))
 
-GP = GradientPenalty(opt.batchSizes[0], opt.lambdaGP)
+GP = GradientPenalty(opt.batchSizes[0], opt.lambdaGP, opt.gamma)
 
 epoch = 0
 total = 2
@@ -169,6 +171,9 @@ while True:
 
         lossEpochG.append(g_loss.data[0])
 
+        # update Gs with exponential moving average
+        exp_mov_avg(Gs, G)
+
         printProgressBar(i + 1, total + 1,
                          length=20,
                          prefix=f'Epoch {epoch} ',
@@ -197,11 +202,11 @@ while True:
         plt.savefig(os.path.join(opt.outd, opt.outl, f'Epoch_{epoch}.png'), dpi=200, bbox_inches='tight')
         plt.clf()
 
-        # Save sampled images
-        G.eval()
+        # Save sampled images with Gs
+        Gs.eval()
         z = to_var(hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1)))
         z.volatile = True
-        fake_images = G(z, P.p).data
+        fake_images = Gs(z, P.p).data
         save_image(fake_images,
                    os.path.join(opt.outd, opt.outf, f'fake_images-{epoch:04d}-p{P.p:.2f}.png'),
                    nrow=8,
@@ -209,5 +214,7 @@ while True:
 
     if P.p >= P.pmax and epoch % opt.savemodel == 0:
         torch.save(G, os.path.join(opt.outd, opt.outm, f'G_nch-{opt.nch}_epoch-{epoch}.pt'))
+        torch.save(D, os.path.join(opt.outd, opt.outm, f'D_nch-{opt.nch}_epoch-{epoch}.pt'))
+        torch.save(Gs, os.path.join(opt.outd, opt.outm, f'Gs_nch-{opt.nch}_epoch-{epoch}.pt'))
 
     epoch += 1

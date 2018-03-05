@@ -47,10 +47,9 @@ class PixelNormLayer(nn.Module):
 class WScaleLayer(nn.Module):
     def __init__(self, incoming, gain=2, init=nn.init.normal):
         super(WScaleLayer, self).__init__()
-        self.incoming = incoming
 
-        init(self.incoming.weight.data)
-        self.scale = (gain / self.incoming.weight.data[0].numel()) ** 0.5
+        init(incoming.weight.data)
+        self.scale = (gain / incoming.weight.data[0].numel()) ** 0.5
 
     def forward(self, input):
         return input * self.scale
