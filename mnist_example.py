@@ -17,6 +17,8 @@ from model import *
 from progressBar import printProgressBar
 from utils import *
 
+from time import time
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--data', type=str, default='DATA', help='directory containing the data')
 parser.add_argument('--n', type=int, default=100, help='number of subjects to use for training')
@@ -85,6 +87,7 @@ g_losses = []
 P = Progress(opt.n_iter, 3, opt.batchSizes)
 
 while True:
+    t0 = time()
 
     lossEpochG = []
     lossEpochD = []
@@ -122,7 +125,7 @@ while True:
             # zeroing gradients in D
             D.zero_grad()
             # compute fake images with G
-            z = to_var(hypersphere(torch.randn(P.batchSize, opt.nch * 32, 1, 1)))
+            z = to_var(hypersphere(normal(P.batchSize, opt.nch * 32, 1, 1)))
             fake_images = to_var(G(z, P.p).data)
 
             # compute scores for real images
@@ -157,7 +160,7 @@ while True:
         G.zero_grad()
         D.zero_grad()
 
-        z = to_var(hypersphere(torch.randn(P.batchSize, opt.nch * 32, 1, 1)))
+        z = to_var(hypersphere(normal(P.batchSize, opt.nch * 32, 1, 1)))
         fake_images = G(z, P.p)
         # compute scores with new fake images
         G_fake = D(fake_images, P.p)
@@ -185,7 +188,7 @@ while True:
     printProgressBar(total, total,
                      done=f'Epoch [{epoch:>3d}]  d_loss: {np.mean(lossEpochD):.4f}'
                           f', d_loss_W: {np.mean(lossEpochD_W):.3f}'
-                          f', progress: {P.p:.2f}'
+                          f', progress: {P.p:.2f}, time: {time() - t0:.2f}s'
                      )
 
     d_losses.extend(lossEpochD)
@@ -204,7 +207,7 @@ while True:
 
         # Save sampled images with Gs
         Gs.eval()
-        z = to_var(hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1)))
+        z = to_var(hypersphere(normal(opt.savenum, opt.nch * 32, 1, 1)))
         z.volatile = True
         fake_images = Gs(z, P.p).data
         save_image(fake_images,

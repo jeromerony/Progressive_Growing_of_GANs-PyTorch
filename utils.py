@@ -29,6 +29,14 @@ def exp_mov_avg(Gs, G, alpha=0.999):
         Gs.state_dict()[state].copy_((1 - alpha) * G.state_dict()[state] + alpha * Gs.state_dict()[state])
 
 
+def normal(*sizes):
+    """Generates normal noise: faster than torch.randn(*sizes).cuda() when using a GPU"""
+    if torch.cuda.is_available():
+        return torch.cuda.FloatTensor(*sizes).normal_()
+    else:
+        return torch.randn(*sizes)
+
+
 class Progress:
     """Determine the progress parameter of the training given the epoch and the progression in the epoch
     Args:
