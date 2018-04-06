@@ -12,26 +12,26 @@ class Generator(nn.Module):
         self.maxRes = maxRes
 
         # output convolutions
-        toRGBs = []
+        self.toRGBs = []
         for i in range(self.maxRes + 1):
             # max of nch * 32 feature maps as in the original article (with nch=16, 512 feature maps at max)
-            toRGBs.append(conv(int(nch * 2 ** (8 - max(3, i))), nc, kernel_size=1, padding=0, bias=bias,
+            self.toRGBs.append(conv(int(nch * 2 ** (8 - max(3, i))), nc, kernel_size=1, padding=0, bias=bias,
                                ws=ws, activ=None, gainWS=1))
-        self.toRGBs = nn.Sequential(*toRGBs)
+        self.toRGBs = nn.ModuleList(self.toRGBs)
 
         # convolutional blocks
-        blocks = []
+        self.blocks = []
         # first block, always present
-        blocks.append(nn.Sequential(
+        self.blocks.append(nn.Sequential(
             conv(nch * 32, nch * 32, kernel_size=4, padding=3, bias=bias, BN=BN, ws=ws, pn=pn, activ=activ),
             conv(nch * 32, nch * 32, bias=bias, BN=BN, ws=ws, pn=pn, activ=activ)))
         for i in range(self.maxRes):
             nin = int(nch * 2 ** (8 - max(3, i)))
             nout = int(nch * 2 ** (8 - max(3, i + 1)))
-            blocks.append(nn.Sequential(
+            self.blocks.append(nn.Sequential(
                 conv(nin, nout, bias=bias, BN=BN, ws=ws, pn=pn, activ=activ),
                 conv(nout, nout, bias=bias, BN=BN, ws=ws, pn=pn, activ=activ)))
-        self.blocks = nn.Sequential(*blocks)
+        self.blocks = nn.ModuleList(self.blocks)
 
         self.pn = []
         if pn:
@@ -78,16 +78,16 @@ class Discriminator(nn.Module):
         self.maxRes = maxRes
 
         # input convolutions
-        fromRGBs = []
+        self.fromRGBs = []
         for i in range(self.maxRes + 1):
-            fromRGBs.append(conv(nc, int(nch * 2 ** (8 - max(3, i))), kernel_size=1, padding=0, bias=bias,
+            self.fromRGBs.append(conv(nc, int(nch * 2 ** (8 - max(3, i))), kernel_size=1, padding=0, bias=bias,
                                  BN=BN, ws=ws, activ=activ))
-        self.fromRGBs = nn.Sequential(*fromRGBs)
+        self.fromRGBs = nn.ModuleList(self.fromRGBs)
 
         # convolutional blocks
-        blocks = []
+        self.blocks = []
         # last block, always present
-        blocks.append(nn.Sequential(conv(nch * 32 + 1, nch * 32, bias=bias, BN=BN, ws=ws, activ=activ),
+        self.blocks.append(nn.Sequential(conv(nch * 32 + 1, nch * 32, bias=bias, BN=BN, ws=ws, activ=activ),
                                     conv(nch * 32, nch * 32, kernel_size=4, padding=0, bias=bias,
                                          BN=BN, ws=ws, activ=activ),
                                     conv(nch * 32, 1, kernel_size=1, padding=0, bias=bias,
@@ -95,9 +95,9 @@ class Discriminator(nn.Module):
         for i in range(self.maxRes):
             nin = int(nch * 2 ** (8 - max(3, i + 1)))
             nout = int(nch * 2 ** (8 - max(3, i)))
-            blocks.append(nn.Sequential(conv(nin, nin, bias=bias, BN=BN, ws=ws, activ=activ),
+            self.blocks.append(nn.Sequential(conv(nin, nin, bias=bias, BN=BN, ws=ws, activ=activ),
                                         conv(nin, nout, bias=bias, BN=BN, ws=ws, activ=activ)))
-        self.blocks = nn.Sequential(*blocks)
+        self.blocks = nn.ModuleList(self.blocks)
 
     def minibatchstd(self, input):
         # must add 1e-8 in std for stability
