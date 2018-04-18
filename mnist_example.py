@@ -74,6 +74,8 @@ if torch.cuda.is_available():
     G.cuda()
     D.cuda()
 Gs = copy.deepcopy(G)
+for param in Gs.parameters():
+    param.detach_()
 
 optimizerG = Adam(G.parameters(), lr=1e-3, betas=(0, 0.99))
 optimizerD = Adam(D.parameters(), lr=1e-3, betas=(0, 0.99))

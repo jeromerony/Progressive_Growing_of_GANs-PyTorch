@@ -25,8 +25,9 @@ def hypersphere(z, radius=1):
 
 
 def exp_mov_avg(Gs, G, alpha=0.999):
-    for state in G.state_dict().keys():
-        Gs.state_dict()[state].copy_((1 - alpha) * G.state_dict()[state] + alpha * Gs.state_dict()[state])
+    for ema_param, param in zip(Gs.parameters(), G.parameters()):
+        ema_param.data.mul_(alpha).add_(1 - alpha, param.data)
+
 
 
 def normal(*sizes):
