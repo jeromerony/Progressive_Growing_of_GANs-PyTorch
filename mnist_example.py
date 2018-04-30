@@ -37,11 +37,10 @@ parser.add_argument('--bias', action='store_true', help='use bias in G and D')
 parser.add_argument('--n_iter', type=int, default=10, help='number of epochs to train before changing the progress')
 parser.add_argument('--lambdaGP', type=float, default=10, help='lambda for gradient penalty')
 parser.add_argument('--gamma', type=float, default=1, help='gamma for gradient penalty')
-parser.add_argument('--n_critic', type=int, default=1, help='number of iterations to train D without training G')
 parser.add_argument('--e_drift', type=float, default=0.001, help='epsilon drift for discriminator loss')
-parser.add_argument('--saveiter', type=int, default=5, help='number of iterations before saving image examples')
+parser.add_argument('--saveimages', type=int, default=5, help='number of epochs between saving image examples')
 parser.add_argument('--savenum', type=int, default=64, help='number of examples images to save')
-parser.add_argument('--savemodel', type=int, default=10, help='number of epochs between saves of epoch')
+parser.add_argument('--savemodel', type=int, default=10, help='number of epochs between saving models')
 parser.add_argument('--savemaxsize', action='store_true', help='save sample images at max resolution instead of real resolution')
 
 opt = parser.parse_args()
@@ -119,33 +118,32 @@ while True:
 
         # ============= Train the discriminator =============#
 
-        for j in range(opt.n_critic):
-            # zeroing gradients in D
-            D.zero_grad()
-            # compute fake images with G
-            z = hypersphere(torch.randn(P.batchSize, opt.nch * 32, 1, 1, device=device))
-            with torch.no_grad():
-                fake_images = G(z, P.p)
+        # zeroing gradients in D
+        D.zero_grad()
+        # compute fake images with G
+        z = hypersphere(torch.randn(P.batchSize, opt.nch * 32, 1, 1, device=device))
+        with torch.no_grad():
+            fake_images = G(z, P.p)
 
-            # compute scores for real images
-            D_real = D(images, P.p)
-            D_realm = D_real.mean()
+        # compute scores for real images
+        D_real = D(images, P.p)
+        D_realm = D_real.mean()
 
-            # compute scores for fake images
-            D_fake = D(fake_images, P.p)
-            D_fakem = D_fake.mean()
+        # compute scores for fake images
+        D_fake = D(fake_images, P.p)
+        D_fakem = D_fake.mean()
 
-            # compute gradient penalty for WGAN-GP as defined in the article
-            gradient_penalty = GP(D, images.data, fake_images.data, P.p)
+        # compute gradient penalty for WGAN-GP as defined in the article
+        gradient_penalty = GP(D, images.data, fake_images.data, P.p)
 
-            # prevent D_real from drifting too much from 0
-            drift = (D_real ** 2).mean() * opt.e_drift
+        # prevent D_real from drifting too much from 0
+        drift = (D_real ** 2).mean() * opt.e_drift
 
-            # Backprop + Optimize
-            d_loss = D_fakem - D_realm
-            d_loss_W = d_loss + gradient_penalty + drift
-            d_loss_W.backward()
-            optimizerD.step()
+        # Backprop + Optimize
+        d_loss = D_fakem - D_realm
+        d_loss_W = d_loss + gradient_penalty + drift
+        d_loss_W.backward()
+        optimizerD.step()
 
         lossEpochD.append(d_loss.item())
         lossEpochD_W.append(d_loss_W.item())
@@ -193,7 +191,7 @@ while True:
     np.save(os.path.join(opt.outd, opt.outl, 'd_losses_W.npy'), d_losses_W)
     np.save(os.path.join(opt.outd, opt.outl, 'g_losses.npy'), g_losses)
 
-    if not (epoch + 1) % opt.saveiter:
+    if not (epoch + 1) % opt.saveimage:
         # plotting loss values, g_losses is not plotted as it does not represent anything in the WGAN-GP
         ax = plt.subplot()
         ax.plot(np.linspace(0, epoch + 1, len(d_losses)), d_losses, '-b', label='d_loss', linewidth=0.1)
@@ -216,7 +214,7 @@ while True:
         save_image(fake_images,
                    os.path.join(opt.outd, opt.outf, f'fake_images-{epoch:04d}-p{P.p:.2f}.png'),
                    nrow=8, pad_value=0,
-                   normalize=True, range=(-1,1))
+                   normalize=True, range=(-1, 1))
 
     if P.p >= P.pmax and not epoch % opt.savemodel:
         torch.save(G, os.path.join(opt.outd, opt.outm, f'G_nch-{opt.nch}_epoch-{epoch}.pth'))
