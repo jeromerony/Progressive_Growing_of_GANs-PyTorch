@@ -21,15 +21,13 @@ from time import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data', type=str, default='DATA', help='directory containing the data')
-parser.add_argument('--n', type=int, default=100, help='number of subjects to use for training')
 parser.add_argument('--outd', default='Results', help='directory to save results')
 parser.add_argument('--outf', default='Images', help='folder to save synthetic images')
 parser.add_argument('--outl', default='Losses', help='folder to save Losses')
 parser.add_argument('--outm', default='Models', help='folder to save models')
 
-parser.add_argument('--workers', type=int, default=20, help='number of data loading workers')
-parser.add_argument('--batchSizes', type=list, default=[256, 192, 128, 64],
-                    help='list of batch sizes during the training')
+parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
+parser.add_argument('--batchSizes', type=list, default=[64, 64, 64, 64], help='list of batch sizes during the training')
 parser.add_argument('--nch', type=int, default=4, help='base number of channel for networks')
 parser.add_argument('--BN', action='store_true', help='use BatchNorm in G and D')
 parser.add_argument('--WS', action='store_true', help='use WeightScale in G and D')
@@ -44,17 +42,21 @@ parser.add_argument('--e_drift', type=float, default=0.001, help='epsilon drift 
 parser.add_argument('--saveiter', type=int, default=5, help='number of iterations before saving image examples')
 parser.add_argument('--savenum', type=int, default=64, help='number of examples images to save')
 parser.add_argument('--savemodel', type=int, default=10, help='number of epochs between saves of epoch')
+parser.add_argument('--savemaxsize', action='store_true', help='save sample images at max resolution instead of real resolution')
 
 opt = parser.parse_args()
 print(opt)
+
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 transform = transforms.Compose([
     # resize to 32x32
     transforms.Pad((2, 2)),
     transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,))
 ])
 
-dataset = MNIST(opt.data, download=True, transform=transform)
+dataset = MNIST(opt.data, download=True, train=True, transform=transform)
 
 # creating output folders
 if not os.path.exists(opt.outd):
@@ -64,29 +66,28 @@ for f in [opt.outf, opt.outl, opt.outm]:
         os.makedirs(os.path.join(opt.outd, f))
 
 # Model creation and init
-G = Generator(maxRes=3, nch=opt.nch, nc=1, bias=opt.bias, BN=opt.BN, ws=opt.WS, pn=opt.PN)
-D = Discriminator(maxRes=3, nch=opt.nch, nc=1, bias=opt.bias, BN=opt.BN, ws=opt.WS)
+G = Generator(maxRes=3, nch=opt.nch, nc=1, bias=opt.bias, BN=opt.BN, ws=opt.WS, pn=opt.PN).to(device)
+D = Discriminator(maxRes=3, nch=opt.nch, nc=1, bias=opt.bias, BN=opt.BN, ws=opt.WS).to(device)
 if not opt.WS:
     # weights are initialized by WScale layers to normal if WS is used
     G.apply(weights_init)
     D.apply(weights_init)
-if torch.cuda.is_available():
-    G.cuda()
-    D.cuda()
 Gs = copy.deepcopy(G)
-for param in Gs.parameters():
-    param.detach_()
 
 optimizerG = Adam(G.parameters(), lr=1e-3, betas=(0, 0.99))
 optimizerD = Adam(D.parameters(), lr=1e-3, betas=(0, 0.99))
 
-GP = GradientPenalty(opt.batchSizes[0], opt.lambdaGP, opt.gamma)
+GP = GradientPenalty(opt.batchSizes[0], opt.lambdaGP, opt.gamma, device=device)
 
 epoch = 0
+global_step = 0
 total = 2
-d_losses = []
-g_losses = []
+d_losses = np.array([])
+d_losses_W = np.array([])
+g_losses = np.array([])
 P = Progress(opt.n_iter, 3, opt.batchSizes)
+
+z_save = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=device))
 
 while True:
     t0 = time()
@@ -110,25 +111,21 @@ while True:
 
     for i, (images, _) in enumerate(data_loader):
         P.progress(epoch, i + 1, total + 1)
+        global_step += 1
 
         # Build mini-batch
-        images = to_var(images)
+        images = images.to(device)
         images = P.resize(images)
 
         # ============= Train the discriminator =============#
-        # enable gradient computation in D
-        for par in D.parameters():
-            par.requires_grad = True
-        for par in G.parameters():
-            par.requires_grad = False
 
-        # not correct to train on the same batch, but n_critic is 1 anyway
         for j in range(opt.n_critic):
             # zeroing gradients in D
             D.zero_grad()
             # compute fake images with G
-            z = to_var(hypersphere(normal(P.batchSize, opt.nch * 32, 1, 1)))
-            fake_images = to_var(G(z, P.p).data)
+            z = hypersphere(torch.randn(P.batchSize, opt.nch * 32, 1, 1, device=device))
+            with torch.no_grad():
+                fake_images = G(z, P.p)
 
             # compute scores for real images
             D_real = D(images, P.p)
@@ -150,19 +147,14 @@ while True:
             d_loss_W.backward()
             optimizerD.step()
 
-        lossEpochD.append(d_loss.data[0])
-        lossEpochD_W.append(d_loss_W.data[0])
+        lossEpochD.append(d_loss.item())
+        lossEpochD_W.append(d_loss_W.item())
 
         # =============== Train the generator ===============#
-        # disable gradient computation in D
-        for par in D.parameters():
-            par.requires_grad = False
-        for par in G.parameters():
-            par.requires_grad = True
-        G.zero_grad()
-        D.zero_grad()
 
-        z = to_var(hypersphere(normal(P.batchSize, opt.nch * 32, 1, 1)))
+        G.zero_grad()
+
+        z = hypersphere(torch.randn(P.batchSize, opt.nch * 32, 1, 1, device=device))
         fake_images = G(z, P.p)
         # compute scores with new fake images
         G_fake = D(fake_images, P.p)
@@ -174,17 +166,17 @@ while True:
         g_loss.backward()
         optimizerG.step()
 
-        lossEpochG.append(g_loss.data[0])
+        lossEpochG.append(g_loss.item())
 
         # update Gs with exponential moving average
-        exp_mov_avg(Gs, G)
+        exp_mov_avg(Gs, G, alpha=0.999, global_step=global_step)
 
         printProgressBar(i + 1, total + 1,
                          length=20,
                          prefix=f'Epoch {epoch} ',
-                         suffix=f', d_loss: {d_loss.data[0]:.3f}'
-                                f', d_loss_W: {d_loss_W.data[0]:.3f}'
-                                f', GP: {gradient_penalty.data[0]:.3f}'
+                         suffix=f', d_loss: {d_loss.item():.3f}'
+                                f', d_loss_W: {d_loss_W.item():.3f}'
+                                f', GP: {gradient_penalty.item():.3f}'
                                 f', progress: {P.p:.2f}')
 
     printProgressBar(total, total,
@@ -193,10 +185,15 @@ while True:
                           f', progress: {P.p:.2f}, time: {time() - t0:.2f}s'
                      )
 
-    d_losses.extend(lossEpochD)
-    g_losses.extend(lossEpochG)
+    d_losses = np.append(d_losses, lossEpochD)
+    d_losses_W = np.append(d_losses_W, lossEpochD_W)
+    g_losses = np.append(g_losses, lossEpochG)
 
-    if (epoch + 1) % opt.saveiter == 0:
+    np.save(os.path.join(opt.outd, opt.outl, 'd_losses.npy'), d_losses)
+    np.save(os.path.join(opt.outd, opt.outl, 'd_losses_W.npy'), d_losses_W)
+    np.save(os.path.join(opt.outd, opt.outl, 'g_losses.npy'), g_losses)
+
+    if not (epoch + 1) % opt.saveiter:
         # plotting loss values, g_losses is not plotted as it does not represent anything in the WGAN-GP
         ax = plt.subplot()
         ax.plot(np.linspace(0, epoch + 1, len(d_losses)), d_losses, '-b', label='d_loss', linewidth=0.1)
@@ -209,17 +206,21 @@ while True:
 
         # Save sampled images with Gs
         Gs.eval()
-        z = to_var(hypersphere(normal(opt.savenum, opt.nch * 32, 1, 1)))
-        z.volatile = True
-        fake_images = Gs(z, P.p).data
+        # z = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=device))
+
+        with torch.no_grad():
+            fake_images = Gs(z_save, P.p)
+            if opt.savemaxsize:
+                if fake_images.size(-1) != 32:
+                    fake_images = F.upsample(fake_images, 32)
         save_image(fake_images,
                    os.path.join(opt.outd, opt.outf, f'fake_images-{epoch:04d}-p{P.p:.2f}.png'),
-                   nrow=8,
-                   pad_value=0)
+                   nrow=8, pad_value=0,
+                   normalize=True, range=(-1,1))
 
-    if P.p >= P.pmax and epoch % opt.savemodel == 0:
-        torch.save(G, os.path.join(opt.outd, opt.outm, f'G_nch-{opt.nch}_epoch-{epoch}.pt'))
-        torch.save(D, os.path.join(opt.outd, opt.outm, f'D_nch-{opt.nch}_epoch-{epoch}.pt'))
-        torch.save(Gs, os.path.join(opt.outd, opt.outm, f'Gs_nch-{opt.nch}_epoch-{epoch}.pt'))
+    if P.p >= P.pmax and not epoch % opt.savemodel:
+        torch.save(G, os.path.join(opt.outd, opt.outm, f'G_nch-{opt.nch}_epoch-{epoch}.pth'))
+        torch.save(D, os.path.join(opt.outd, opt.outm, f'D_nch-{opt.nch}_epoch-{epoch}.pth'))
+        torch.save(Gs, os.path.join(opt.outd, opt.outm, f'Gs_nch-{opt.nch}_epoch-{epoch}.pth'))
 
     epoch += 1

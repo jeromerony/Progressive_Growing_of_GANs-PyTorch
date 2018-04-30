@@ -6,36 +6,24 @@ import torch.nn.functional as F
 from torch.autograd import Variable, grad
 
 
-def to_var(x, requires_grad=False):
-    if torch.cuda.is_available():
-        x = x.cuda()
-    return Variable(x, requires_grad=requires_grad)
-
-
 def weights_init(m):
     if type(m) == nn.Conv2d or type(m) == nn.ConvTranspose2d:
-        nn.init.xavier_normal(m.weight.data)
+        nn.init.xavier_normal_(m.weight.data)
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0)
     elif type(m) == nn.BatchNorm2d:
-        m.weight.data.normal_(1.0, 0.02)
-        m.bias.data.fill_(0)
+        nn.init.normal_(m.weight, 1.0, 0.02)
+        nn.init.constant_(m.bias, 0)
 
 
 def hypersphere(z, radius=1):
     return z * radius / z.norm(p=2, dim=1, keepdim=True)
 
 
-def exp_mov_avg(Gs, G, alpha=0.999):
+def exp_mov_avg(Gs, G, alpha=0.999, global_step=999):
+    alpha = min(1 - 1 / (global_step + 1), alpha)
     for ema_param, param in zip(Gs.parameters(), G.parameters()):
         ema_param.data.mul_(alpha).add_(1 - alpha, param.data)
-
-
-
-def normal(*sizes):
-    """Generates normal noise: faster than torch.randn(*sizes).cuda() when using a GPU"""
-    if torch.cuda.is_available():
-        return torch.cuda.FloatTensor(*sizes).normal_()
-    else:
-        return torch.randn(*sizes)
 
 
 class Progress:
@@ -98,21 +86,21 @@ class GradientPenalty:
         gamma (float): regularization term of the gradient penalty, augment to minimize "ghosts"
     """
 
-    def __init__(self, batchSize, lambdaGP, gamma=1):
+    def __init__(self, batchSize, lambdaGP, gamma=1, device='cpu'):
         self.batchSize = batchSize
         self.lambdaGP = lambdaGP
         self.gamma = gamma
+        self.device = device
 
     def __call__(self, netD, real_data, fake_data, progress):
-        alpha = torch.rand(self.batchSize, 1, 1, 1).cuda()
+        alpha = torch.rand(self.batchSize, 1, 1, 1, requires_grad=True, device=self.device)
         # randomly mix real and fake data
         interpolates = real_data + alpha * (fake_data - real_data)
-        interpolates = to_var(interpolates, requires_grad=True)
         # compute output of D for interpolated input
         disc_interpolates = netD(interpolates, progress)
         # compute gradients w.r.t the interpolated outputs
         gradients = grad(outputs=disc_interpolates, inputs=interpolates,
-                         grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
+                         grad_outputs=torch.ones(disc_interpolates.size(), device=self.device),
                          create_graph=True, retain_graph=True, only_inputs=True)[0]
         gradient_penalty = (((gradients.norm(2, dim=1) - self.gamma) / self.gamma) ** 2).mean() * self.lambdaGP
 

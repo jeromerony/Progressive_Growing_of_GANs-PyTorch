@@ -129,8 +129,7 @@ class Discriminator(nn.Module):
 
 
 if __name__ == '__main__':
-    from utils import to_var
-
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     def param_number(net):
         n = 0
@@ -138,23 +137,20 @@ if __name__ == '__main__':
             n += par.numel()
         return n
 
-
     # test in original configuration
     nch = 16
-    G = Generator(nch=nch, bias=True, ws=True, pn=True)
+    G = Generator(nch=nch, bias=True, ws=True, pn=True).to(device)
     print(G)
-    D = Discriminator(nch=nch, bias=True, ws=True)
+    D = Discriminator(nch=nch, bias=True, ws=True).to(device)
     print(D)
-    G.cuda()
-    D.cuda()
+    z = torch.rand(4, nch * 32, 1, 1)
 
-    z = to_var(torch.rand(4, nch * 32, 1, 1))
-    z.volatile = True
-    print('##### Testing Generator #####')
-    print(f'Generator has {param_number(G)} parameters')
-    for i in range((G.maxRes + 1) * 2):
-        print(i / 2, ' -> ', G(z, i / 2).size())
-    print('##### Testing Discriminator #####')
-    print(f'Generator has {param_number(D)} parameters')
-    for i in range((G.maxRes + 1) * 2):
-        print(i / 2, ' -> ', D(G(z, i / 2), i / 2).size())
+    with torch.no_grad():
+        print('##### Testing Generator #####')
+        print(f'Generator has {param_number(G)} parameters')
+        for i in range((G.maxRes + 1) * 2):
+            print(i / 2, ' -> ', G(z, i / 2).size())
+        print('##### Testing Discriminator #####')
+        print(f'Generator has {param_number(D)} parameters')
+        for i in range((G.maxRes + 1) * 2):
+            print(i / 2, ' -> ', D(G(z, i / 2), i / 2).size())

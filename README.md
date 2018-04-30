@@ -1,5 +1,5 @@
 # PyTorch implementation of Progressive Growing of GANs
-A simple PyTorch implementation of "Progressive Growing of GANs for Improved Quality, Stability and Variability" (https://arxiv.org/abs/1710.10196).
+A PyTorch implementation of "Progressive Growing of GANs for Improved Quality, Stability and Variability" (https://arxiv.org/abs/1710.10196) compatible with **PyTorch 0.4**.
 
 ## Implementation details
 - The growing of the GAN is based on a progress parameter p that increases during training. This parameter drives the sizes of input and output of the generator and the discriminator.
@@ -9,7 +9,14 @@ A simple PyTorch implementation of "Progressive Growing of GANs for Improved Qua
 I tried to follow the original article as much as possible.
 This repo gives a simple example of how it can be used on MNIST.
 
-This implementation was done in **Python 3.6** and uses f-string so this will create an error in previous Python versions.
+This implementation was done in **Python 3.6** and uses f-string so this will create errors in previous Python versions.
+
+## Generated Images
+This is an example obtained from training the PG-GAN on MNIST during 90 epochs (60 epochs of growing + 30 epochs of stabilizing) by running `python mnist_example.py --PN --WS --bias`
+
+![alt text](MNIST_90epochs.png "Title")
+
+More results coming for CIFAR10.
 
 ## Acknowledgement
 - https://github.com/tkarras/progressive_growing_of_gans/

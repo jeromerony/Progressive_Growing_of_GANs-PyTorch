@@ -13,12 +13,11 @@ def conv(nin, nout, kernel_size=3, stride=1, padding=1, bias=False, layer=nn.Con
     if BN:
         layers.append(nn.BatchNorm2d(nout))
     if activ is not None:
-        if type(activ) == nn.PReLU or type(activ) == nn.LeakyReLU or type(activ) == nn.ReLU:
-            # if activ == nn.PReLU(), only one parameter will be shared for the whole network !
-            layers.append(activ)
-        elif activ == nn.PReLU:
+        if activ == nn.PReLU:
             # to avoid sharing the same parameter, activ must be set to nn.PReLU (without '()') and initialized here
             layers.append(activ(num_parameters=1))
+        else:
+            layers.append(activ)
     if pn:
         layers.append(PixelNormLayer())
     layers.insert(ws, convlayer)
@@ -45,11 +44,11 @@ class PixelNormLayer(nn.Module):
 
 
 class WScaleLayer(nn.Module):
-    def __init__(self, incoming, gain=2, init=nn.init.normal):
+    def __init__(self, incoming, gain=2, init=nn.init.normal_):
         super(WScaleLayer, self).__init__()
 
-        init(incoming.weight.data)
-        self.scale = (gain / incoming.weight.data[0].numel()) ** 0.5
+        init(incoming.weight)
+        self.scale = (gain / incoming.weight[0].numel()) ** 0.5
 
     def forward(self, input):
         return input * self.scale
@@ -70,9 +69,9 @@ class Bias(nn.Module):
         self.bias = incoming.bias
         incoming.bias = None
         if init == 'zero':
-            nn.init.constant(self.bias, 0)
+            nn.init.constant_(self.bias, 0)
         elif init == 'normal':
-            nn.init.normal(self.bias)
+            nn.init.normal_(self.bias)
 
     def forward(self, input):
         return input + self.bias.view(1, -1, 1, 1)
