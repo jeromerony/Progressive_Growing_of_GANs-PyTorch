@@ -191,7 +191,7 @@ while True:
     np.save(os.path.join(opt.outd, opt.outl, 'd_losses_W.npy'), d_losses_W)
     np.save(os.path.join(opt.outd, opt.outl, 'g_losses.npy'), g_losses)
 
-    if not (epoch + 1) % opt.saveimage:
+    if not (epoch + 1) % opt.saveimages:
         # plotting loss values, g_losses is not plotted as it does not represent anything in the WGAN-GP
         ax = plt.subplot()
         ax.plot(np.linspace(0, epoch + 1, len(d_losses)), d_losses, '-b', label='d_loss', linewidth=0.1)
