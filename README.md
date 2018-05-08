@@ -12,9 +12,9 @@ This repo gives a simple example of how it can be used on MNIST.
 This implementation was done in **Python 3.6** and uses f-string so this will create errors in previous Python versions.
 
 ## Generated Images
-This is an example obtained from training the PG-GAN on MNIST during 90 epochs (60 epochs of growing + 30 epochs of stabilizing) by running `python mnist_example.py --PN --WS --bias`
+This is a gif of the training obtained from the PG-GAN on MNIST during 210 epochs (60 epochs of growing + 150 epochs of stabilizing) by running `python mnist_example.py --PN --WS --bias`
 
-![alt text](MNIST_90epochs.png "Title")
+![MNIST-Training-GIF](Images/MNIST_210epochs.gif "Title")
 
 More results coming for CIFAR10.
 
