@@ -101,7 +101,7 @@ class GradientPenalty:
         # compute gradients w.r.t the interpolated outputs
         gradients = grad(outputs=disc_interpolates, inputs=interpolates,
                          grad_outputs=torch.ones(disc_interpolates.size(), device=self.device),
-                         create_graph=True, retain_graph=True, only_inputs=True)[0]
+                         create_graph=True, retain_graph=True, only_inputs=True)[0].view(self.batchSize, -1)
         gradient_penalty = (((gradients.norm(2, dim=1) - self.gamma) / self.gamma) ** 2).mean() * self.lambdaGP
 
         return gradient_penalty
