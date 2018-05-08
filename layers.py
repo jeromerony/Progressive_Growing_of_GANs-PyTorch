@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 
 
 def conv(nin, nout, kernel_size=3, stride=1, padding=1, bias=False, layer=nn.Conv2d,
@@ -8,8 +9,8 @@ def conv(nin, nout, kernel_size=3, stride=1, padding=1, bias=False, layer=nn.Con
     layers = []
     if ws:
         layers.append(WScaleLayer(convlayer, gain=gainWS))
-    if bias:
-        layers.append(Bias(convlayer))
+        if bias:
+            nn.init.constant_(convlayer.bias, 0)
     if BN:
         layers.append(nn.BatchNorm2d(nout))
     if activ is not None:
@@ -37,7 +38,7 @@ class PixelNormLayer(nn.Module):
         super(PixelNormLayer, self).__init__()
 
     def forward(self, x):
-        return x / torch.sqrt(torch.mean(x ** 2, dim=1, keepdim=True) + 1e-8)
+        return F.normalize(x)
 
     def __repr__(self):
         return self.__class__.__name__
@@ -55,26 +56,3 @@ class WScaleLayer(nn.Module):
 
     def __repr__(self):
         return f'{self.__class__.__name__}'
-
-
-class Bias(nn.Module):
-    """
-    Applies bias out of the convolutions, i.e. after the WScale
-    """
-
-    def __init__(self, incoming, init='zero'):
-        super(Bias, self).__init__()
-        self.incomingname = incoming.__class__.__name__
-
-        self.bias = incoming.bias
-        incoming.bias = None
-        if init == 'zero':
-            nn.init.constant_(self.bias, 0)
-        elif init == 'normal':
-            nn.init.normal_(self.bias)
-
-    def forward(self, input):
-        return input + self.bias.view(1, -1, 1, 1)
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}(incoming={self.incomingname})'
