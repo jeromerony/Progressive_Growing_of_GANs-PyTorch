@@ -105,7 +105,9 @@ while True:
                              batch_size=P.batchSize,
                              shuffle=True,
                              num_workers=opt.workers,
-                             drop_last=True)
+                             drop_last=True,
+                             pin_memory=True)
+
     total = len(data_loader)
 
     for i, (images, _) in enumerate(data_loader):
