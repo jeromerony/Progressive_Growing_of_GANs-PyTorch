@@ -16,7 +16,7 @@ class Generator(nn.Module):
         for i in range(self.maxRes + 1):
             # max of nch * 32 feature maps as in the original article (with nch=16, 512 feature maps at max)
             self.toRGBs.append(conv(int(nch * 2 ** (8 - max(3, i))), nc, kernel_size=1, padding=0, bias=bias,
-                               ws=ws, activ=None, gainWS=1))
+                                    ws=ws, activ=None, gainWS=1))
         self.toRGBs = nn.ModuleList(self.toRGBs)
 
         # convolutional blocks
@@ -81,27 +81,26 @@ class Discriminator(nn.Module):
         self.fromRGBs = []
         for i in range(self.maxRes + 1):
             self.fromRGBs.append(conv(nc, int(nch * 2 ** (8 - max(3, i))), kernel_size=1, padding=0, bias=bias,
-                                 BN=BN, ws=ws, activ=activ))
+                                      BN=BN, ws=ws, activ=activ))
         self.fromRGBs = nn.ModuleList(self.fromRGBs)
 
         # convolutional blocks
         self.blocks = []
         # last block, always present
-        self.blocks.append(nn.Sequential(conv(nch * 32 + 1, nch * 32, bias=bias, BN=BN, ws=ws, activ=activ),
-                                    conv(nch * 32, nch * 32, kernel_size=4, padding=0, bias=bias,
-                                         BN=BN, ws=ws, activ=activ),
-                                    conv(nch * 32, 1, kernel_size=1, padding=0, bias=bias,
-                                         ws=ws, gainWS=1, activ=None)))
+        self.blocks.append(nn.Sequential(
+            conv(nch * 32 + 1, nch * 32, bias=bias, BN=BN, ws=ws, activ=activ),
+            conv(nch * 32, nch * 32, kernel_size=4, padding=0, bias=bias, BN=BN, ws=ws, activ=activ),
+            conv(nch * 32, 1, kernel_size=1, padding=0, bias=bias, ws=ws, gainWS=1, activ=None)))
         for i in range(self.maxRes):
             nin = int(nch * 2 ** (8 - max(3, i + 1)))
             nout = int(nch * 2 ** (8 - max(3, i)))
             self.blocks.append(nn.Sequential(conv(nin, nin, bias=bias, BN=BN, ws=ws, activ=activ),
-                                        conv(nin, nout, bias=bias, BN=BN, ws=ws, activ=activ)))
+                                             conv(nin, nout, bias=bias, BN=BN, ws=ws, activ=activ)))
         self.blocks = nn.ModuleList(self.blocks)
 
     def minibatchstd(self, input):
         # must add 1e-8 in std for stability
-        return mean(torch.sqrt(input.var(dim=0, keepdim=True) + 1e-8), axis=[1, 2, 3], keepdim=True)
+        return (input.var(dim=0, keepdim=True) + 1e-8).sqrt().view(input.size(0), -1).mean(dim=1).view(-1, 1, 1, 1)
 
     def forward(self, input, x=None):
         if x is None:
@@ -131,11 +130,13 @@ class Discriminator(nn.Module):
 if __name__ == '__main__':
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
+
     def param_number(net):
         n = 0
         for par in net.parameters():
             n += par.numel()
         return n
+
 
     # test in original configuration
     nch = 16

@@ -25,14 +25,6 @@ def conv(nin, nout, kernel_size=3, stride=1, padding=1, bias=False, layer=nn.Con
     return nn.Sequential(*layers)
 
 
-def mean(tensor, axis, **kwargs):
-    if isinstance(axis, int):
-        axis = [axis]
-    for ax in axis:
-        tensor = torch.mean(tensor, dim=ax, **kwargs)
-    return tensor
-
-
 class PixelNormLayer(nn.Module):
     def __init__(self):
         super(PixelNormLayer, self).__init__()

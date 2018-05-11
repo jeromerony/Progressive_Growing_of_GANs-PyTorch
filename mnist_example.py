@@ -88,6 +88,16 @@ P = Progress(opt.n_iter, 3, opt.batchSizes)
 
 z_save = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=device))
 
+P.progress(epoch, 1, total)
+GP.batchSize = P.batchSize
+# Creation of DataLoader
+data_loader = DataLoader(dataset,
+                         batch_size=P.batchSize,
+                         shuffle=True,
+                         num_workers=opt.workers,
+                         drop_last=True,
+                         pin_memory=True)
+
 while True:
     t0 = time()
 
@@ -98,15 +108,17 @@ while True:
     G.train()
 
     P.progress(epoch, 1, total)
-    # update batch-size in gradient penalty
-    GP.batchSize = P.batchSize
-    # Creation of DataLoader at each epoch to vary the batch-size as the resolution increases
-    data_loader = DataLoader(dataset,
-                             batch_size=P.batchSize,
-                             shuffle=True,
-                             num_workers=opt.workers,
-                             drop_last=True,
-                             pin_memory=True)
+
+    if P.batchSize != data_loader.batch_size:
+        # update batch-size in gradient penalty
+        GP.batchSize = P.batchSize
+        # modify DataLoader at each change in resolution to vary the batch-size as the resolution increases
+        data_loader = DataLoader(dataset,
+                                 batch_size=P.batchSize,
+                                 shuffle=True,
+                                 num_workers=opt.workers,
+                                 drop_last=True,
+                                 pin_memory=True)
 
     total = len(data_loader)
 
