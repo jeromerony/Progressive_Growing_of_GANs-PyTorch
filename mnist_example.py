@@ -46,7 +46,8 @@ parser.add_argument('--savemaxsize', action='store_true', help='save sample imag
 opt = parser.parse_args()
 print(opt)
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+MAX_RES = 3 # for 32x32 output
 
 transform = transforms.Compose([
     # resize to 32x32
@@ -65,8 +66,8 @@ for f in [opt.outf, opt.outl, opt.outm]:
         os.makedirs(os.path.join(opt.outd, f))
 
 # Model creation and init
-G = Generator(maxRes=3, nch=opt.nch, nc=1, bias=opt.bias, BN=opt.BN, ws=opt.WS, pn=opt.PN).to(device)
-D = Discriminator(maxRes=3, nch=opt.nch, nc=1, bias=opt.bias, BN=opt.BN, ws=opt.WS).to(device)
+G = Generator(maxRes=MAX_RES, nch=opt.nch, nc=1, bias=opt.bias, BN=opt.BN, ws=opt.WS, pn=opt.PN).to(DEVICE)
+D = Discriminator(maxRes=MAX_RES, nch=opt.nch, nc=1, bias=opt.bias, BN=opt.BN, ws=opt.WS).to(DEVICE)
 if not opt.WS:
     # weights are initialized by WScale layers to normal if WS is used
     G.apply(weights_init)
@@ -76,7 +77,7 @@ Gs = copy.deepcopy(G)
 optimizerG = Adam(G.parameters(), lr=1e-3, betas=(0, 0.99))
 optimizerD = Adam(D.parameters(), lr=1e-3, betas=(0, 0.99))
 
-GP = GradientPenalty(opt.batchSizes[0], opt.lambdaGP, opt.gamma, device=device)
+GP = GradientPenalty(opt.batchSizes[0], opt.lambdaGP, opt.gamma, device=DEVICE)
 
 epoch = 0
 global_step = 0
@@ -84,9 +85,9 @@ total = 2
 d_losses = np.array([])
 d_losses_W = np.array([])
 g_losses = np.array([])
-P = Progress(opt.n_iter, 3, opt.batchSizes)
+P = Progress(opt.n_iter, MAX_RES, opt.batchSizes)
 
-z_save = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=device))
+z_save = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=DEVICE))
 
 P.progress(epoch, 1, total)
 GP.batchSize = P.batchSize
@@ -127,7 +128,7 @@ while True:
         global_step += 1
 
         # Build mini-batch
-        images = images.to(device)
+        images = images.to(DEVICE)
         images = P.resize(images)
 
         # ============= Train the discriminator =============#
@@ -135,7 +136,7 @@ while True:
         # zeroing gradients in D
         D.zero_grad()
         # compute fake images with G
-        z = hypersphere(torch.randn(P.batchSize, opt.nch * 32, 1, 1, device=device))
+        z = hypersphere(torch.randn(P.batchSize, opt.nch * 32, 1, 1, device=DEVICE))
         with torch.no_grad():
             fake_images = G(z, P.p)
 
@@ -166,7 +167,7 @@ while True:
 
         G.zero_grad()
 
-        z = hypersphere(torch.randn(P.batchSize, opt.nch * 32, 1, 1, device=device))
+        z = hypersphere(torch.randn(P.batchSize, opt.nch * 32, 1, 1, device=DEVICE))
         fake_images = G(z, P.p)
         # compute scores with new fake images
         G_fake = D(fake_images, P.p)
@@ -218,7 +219,7 @@ while True:
 
         # Save sampled images with Gs
         Gs.eval()
-        # z = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=device))
+        # z = hypersphere(torch.randn(opt.savenum, opt.nch * 32, 1, 1, device=DEVICE))
 
         with torch.no_grad():
             fake_images = Gs(z_save, P.p)
