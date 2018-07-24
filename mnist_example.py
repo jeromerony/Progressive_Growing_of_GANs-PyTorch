@@ -32,7 +32,6 @@ parser.add_argument('--nch', type=int, default=4, help='base number of channel f
 parser.add_argument('--BN', action='store_true', help='use BatchNorm in G and D')
 parser.add_argument('--WS', action='store_true', help='use WeightScale in G and D')
 parser.add_argument('--PN', action='store_true', help='use PixelNorm in G')
-parser.add_argument('--bias', action='store_true', help='use bias in G and D')
 
 parser.add_argument('--n_iter', type=int, default=1, help='number of epochs to train before changing the progress')
 parser.add_argument('--lambdaGP', type=float, default=10, help='lambda for gradient penalty')
@@ -66,8 +65,8 @@ for f in [opt.outf, opt.outl, opt.outm]:
         os.makedirs(os.path.join(opt.outd, f))
 
 # Model creation and init
-G = Generator(maxRes=MAX_RES, nch=opt.nch, nc=1, bias=opt.bias, BN=opt.BN, ws=opt.WS, pn=opt.PN).to(DEVICE)
-D = Discriminator(maxRes=MAX_RES, nch=opt.nch, nc=1, bias=opt.bias, BN=opt.BN, ws=opt.WS).to(DEVICE)
+G = Generator(max_res=MAX_RES, nch=opt.nch, nc=1, bn=opt.BN, ws=opt.WS, pn=opt.PN).to(DEVICE)
+D = Discriminator(max_res=MAX_RES, nch=opt.nch, nc=1, bn=opt.BN, ws=opt.WS).to(DEVICE)
 if not opt.WS:
     # weights are initialized by WScale layers to normal if WS is used
     G.apply(weights_init)

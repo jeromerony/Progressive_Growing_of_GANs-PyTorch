@@ -6,53 +6,61 @@ from layers import *
 
 
 class Generator(nn.Module):
-    def __init__(self, maxRes=8, nch=16, nc=3, bias=False, BN=False, ws=False, pn=False, activ=nn.LeakyReLU(0.2)):
+    def __init__(self, max_res=8, nch=16, nc=3, bn=False, ws=False, pn=False, activ=nn.LeakyReLU(0.2)):
         super(Generator, self).__init__()
-        # resolution of output as 4 * 2^maxRes: 0 -> 4x4, 1 -> 8x8, ..., 8 -> 1024x1024
-        self.maxRes = maxRes
+        # resolution of output as 4 * 2^max_res: 0 -> 4x4, 1 -> 8x8, ..., 8 -> 1024x1024
+        self.max_res = max_res
 
         # output convolutions
-        self.toRGBs = []
-        for i in range(self.maxRes + 1):
+        self.toRGBs = nn.ModuleList()
+        for i in range(self.max_res + 1):
             # max of nch * 32 feature maps as in the original article (with nch=16, 512 feature maps at max)
-            self.toRGBs.append(conv(int(nch * 2 ** (8 - max(3, i))), nc, kernel_size=1, padding=0, bias=bias,
+            self.toRGBs.append(conv(int(nch * 2 ** (8 - max(3, i))), nc, kernel_size=1, padding=0,
                                     ws=ws, activ=None, gainWS=1))
-        self.toRGBs = nn.ModuleList(self.toRGBs)
 
         # convolutional blocks
-        self.blocks = []
+        self.blocks = nn.ModuleList()
         # first block, always present
-        self.blocks.append(nn.Sequential(
-            conv(nch * 32, nch * 32, kernel_size=4, padding=3, bias=bias, BN=BN, ws=ws, pn=pn, activ=activ),
-            conv(nch * 32, nch * 32, bias=bias, BN=BN, ws=ws, pn=pn, activ=activ)))
-        for i in range(self.maxRes):
+        self.blocks.append(nn.Sequential(OrderedDict([
+            ('conv0', conv(nch * 32, nch * 32, kernel_size=4, padding=3, bn=bn, ws=ws, pn=pn, activ=activ)),
+            ('conv1', conv(nch * 32, nch * 32, bn=bn, ws=ws, pn=pn, activ=activ))
+        ])))
+        for i in range(self.max_res):
             nin = int(nch * 2 ** (8 - max(3, i)))
             nout = int(nch * 2 ** (8 - max(3, i + 1)))
-            self.blocks.append(nn.Sequential(
-                conv(nin, nout, bias=bias, BN=BN, ws=ws, pn=pn, activ=activ),
-                conv(nout, nout, bias=bias, BN=BN, ws=ws, pn=pn, activ=activ)))
-        self.blocks = nn.ModuleList(self.blocks)
+            self.blocks.append(nn.Sequential(OrderedDict([
+                ('conv0', conv(nin, nout, bn=bn, ws=ws, pn=pn, activ=activ)),
+                ('conv1', conv(nout, nout, bn=bn, ws=ws, pn=pn, activ=activ))
+            ])))
 
-        self.pn = []
+        self.pn = None
         if pn:
-            self.pn.append(PixelNormLayer())
-        self.pn = nn.Sequential(*self.pn)
+            self.pn = PixelNormLayer()
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.normal_(m.weight, 0, 1) if ws else nn.init.kaiming_normal_(m.weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, input, x=None):
         # value driving the number of layers used in generation
         if x is None:
-            progress = self.maxRes
+            progress = self.max_res
         else:
-            progress = min(x, self.maxRes)
+            progress = min(x, self.max_res)
 
         alpha = progress - int(progress)
 
-        pn_input = self.pn(input)
+        norm_input = self.pn(input) if self.pn else input
 
         # generating image of size corresponding to progress
         # Example : for progress going from 0 + epsilon to 1 excluded :
         # the output will be of size 8x8 as sum of 4x4 upsampled and output of convolution
-        y1 = self.blocks[0](pn_input)
+        y1 = self.blocks[0](norm_input)
         y0 = y1
 
         for i in range(1, int(ceil(progress) + 1)):
@@ -72,31 +80,41 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, maxRes=8, nch=16, nc=3, bias=False, BN=False, ws=False, activ=nn.LeakyReLU(0.2)):
+    def __init__(self, max_res=8, nch=16, nc=3, bn=False, ws=False, activ=nn.LeakyReLU(0.2)):
         super(Discriminator, self).__init__()
         # resolution of output as 4 * 2^maxRes: 0 -> 4x4, 1 -> 8x8, ..., 8 -> 1024x1024
-        self.maxRes = maxRes
+        self.max_res = max_res
 
         # input convolutions
-        self.fromRGBs = []
-        for i in range(self.maxRes + 1):
-            self.fromRGBs.append(conv(nc, int(nch * 2 ** (8 - max(3, i))), kernel_size=1, padding=0, bias=bias,
-                                      BN=BN, ws=ws, activ=activ))
-        self.fromRGBs = nn.ModuleList(self.fromRGBs)
+        self.fromRGBs = nn.ModuleList()
+        for i in range(self.max_res + 1):
+            self.fromRGBs.append(conv(nc, int(nch * 2 ** (8 - max(3, i))), kernel_size=1, padding=0,
+                                      bn=bn, ws=ws, activ=activ))
 
         # convolutional blocks
-        self.blocks = []
+        self.blocks = nn.ModuleList()
         # last block, always present
-        self.blocks.append(nn.Sequential(
-            conv(nch * 32 + 1, nch * 32, bias=bias, BN=BN, ws=ws, activ=activ),
-            conv(nch * 32, nch * 32, kernel_size=4, padding=0, bias=bias, BN=BN, ws=ws, activ=activ),
-            conv(nch * 32, 1, kernel_size=1, padding=0, bias=bias, ws=ws, gainWS=1, activ=None)))
-        for i in range(self.maxRes):
+        self.blocks.append(nn.Sequential(OrderedDict([
+            ('conv_std', conv(nch * 32 + 1, nch * 32, bn=bn, ws=ws, activ=activ)),
+            ('conv_pool', conv(nch * 32, nch * 32, kernel_size=4, padding=0, bn=bn, ws=ws, activ=activ)),
+            ('conv_class', conv(nch * 32, 1, kernel_size=1, padding=0, ws=ws, gainWS=1, activ=None))
+        ])))
+        for i in range(self.max_res):
             nin = int(nch * 2 ** (8 - max(3, i + 1)))
             nout = int(nch * 2 ** (8 - max(3, i)))
-            self.blocks.append(nn.Sequential(conv(nin, nin, bias=bias, BN=BN, ws=ws, activ=activ),
-                                             conv(nin, nout, bias=bias, BN=BN, ws=ws, activ=activ)))
-        self.blocks = nn.ModuleList(self.blocks)
+            self.blocks.append(nn.Sequential(OrderedDict([
+                ('conv0', conv(nin, nin, bn=bn, ws=ws, activ=activ)),
+                ('conv1', conv(nin, nout, bn=bn, ws=ws, activ=activ))
+            ])))
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.normal_(m.weight, 0, 1) if ws else nn.init.kaiming_normal_(m.weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
 
     def minibatchstd(self, input):
         # must add 1e-8 in std for stability
@@ -104,9 +122,9 @@ class Discriminator(nn.Module):
 
     def forward(self, input, x=None):
         if x is None:
-            progress = self.maxRes
+            progress = self.max_res
         else:
-            progress = min(x, self.maxRes)
+            progress = min(x, self.max_res)
 
         alpha = progress - int(progress)
 
@@ -140,18 +158,18 @@ if __name__ == '__main__':
 
     # test in original configuration
     nch = 16
-    G = Generator(nch=nch, bias=True, ws=True, pn=True).to(device)
+    G = Generator(nch=nch, ws=True, pn=True).to(device)
     print(G)
-    D = Discriminator(nch=nch, bias=True, ws=True).to(device)
+    D = Discriminator(nch=nch, ws=True).to(device)
     print(D)
-    z = torch.rand(4, nch * 32, 1, 1)
+    z = torch.randn(4, nch * 32, 1, 1, device=device)
 
     with torch.no_grad():
         print('##### Testing Generator #####')
         print(f'Generator has {param_number(G)} parameters')
-        for i in range((G.maxRes + 1) * 2):
+        for i in range((G.max_res + 1) * 2):
             print(i / 2, ' -> ', G(z, i / 2).size())
         print('##### Testing Discriminator #####')
         print(f'Generator has {param_number(D)} parameters')
-        for i in range((G.maxRes + 1) * 2):
+        for i in range((G.max_res + 1) * 2):
             print(i / 2, ' -> ', D(G(z, i / 2), i / 2).size())
