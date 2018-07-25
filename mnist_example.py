@@ -9,6 +9,7 @@ import numpy as np
 
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+from torch.backends import cudnn
 from torchvision import transforms
 from torchvision.utils import save_image
 from torchvision.datasets import MNIST
@@ -106,6 +107,7 @@ while True:
     lossEpochD_W = []
 
     G.train()
+    cudnn.benchmark = True
 
     P.progress(epoch, 1, total)
 
@@ -205,6 +207,7 @@ while True:
     np.save(os.path.join(opt.outd, opt.outl, 'd_losses_W.npy'), d_losses_W)
     np.save(os.path.join(opt.outd, opt.outl, 'g_losses.npy'), g_losses)
 
+    cudnn.benchmark = False
     if not (epoch + 1) % opt.saveimages:
         # plotting loss values, g_losses is not plotted as it does not represent anything in the WGAN-GP
         ax = plt.subplot()
@@ -223,8 +226,8 @@ while True:
         with torch.no_grad():
             fake_images = Gs(z_save, P.p)
             if opt.savemaxsize:
-                if fake_images.size(-1) != 32:
-                    fake_images = F.upsample(fake_images, 32)
+                if fake_images.size(-1) != 4 * 2 ** MAX_RES:
+                    fake_images = F.upsample(fake_images, 4 * 2 ** MAX_RES)
         save_image(fake_images,
                    os.path.join(opt.outd, opt.outf, f'fake_images-{epoch:04d}-p{P.p:.2f}.png'),
                    nrow=8, pad_value=0,
