@@ -118,7 +118,7 @@ class Discriminator(nn.Module):
 
     def minibatchstd(self, input):
         # must add 1e-8 in std for stability
-        return (input.var(dim=0, keepdim=True) + 1e-8).sqrt().view(input.size(0), -1).mean(dim=1).view(-1, 1, 1, 1)
+        return (input.var(dim=0) + 1e-8).sqrt().mean().view(1, 1, 1, 1)
 
     def forward(self, input, x=None):
         if x is None:
