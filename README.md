@@ -22,4 +22,4 @@ More results coming for CIFAR10.
 - https://github.com/tkarras/progressive_growing_of_gans/
 
 ## Author
-Jerome Rony [@Latope2-150](https://github.com/Latope2-150)
+Jerome Rony [@jeromerony](https://github.com/jeromerony)
