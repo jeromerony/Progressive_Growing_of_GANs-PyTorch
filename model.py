@@ -1,8 +1,10 @@
 from math import ceil
-
+from collections import OrderedDict
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
-from layers import *
+from layers import conv, PixelNormLayer
 
 
 class Generator(nn.Module):
@@ -33,9 +35,7 @@ class Generator(nn.Module):
                 ('conv1', conv(nout, nout, bn=bn, ws=ws, pn=pn, activ=activ))
             ])))
 
-        self.pn = None
-        if pn:
-            self.pn = PixelNormLayer()
+        self.pn = PixelNormLayer() if pn else None
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -61,11 +61,9 @@ class Generator(nn.Module):
         # Example : for progress going from 0 + epsilon to 1 excluded :
         # the output will be of size 8x8 as sum of 4x4 upsampled and output of convolution
         y1 = self.blocks[0](norm_input)
-        y0 = y1
 
         for i in range(1, int(ceil(progress) + 1)):
-            y1 = F.upsample(y1, scale_factor=2)
-            y0 = y1
+            y0 = F.interpolate(y1, scale_factor=2)
             y1 = self.blocks[i](y0)
 
         # converting to RGB
@@ -116,9 +114,10 @@ class Discriminator(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def minibatchstd(self, input):
+    @staticmethod
+    def minibatchstd(input):
         # must add 1e-8 in std for stability
-        return (input.var(dim=0) + 1e-8).sqrt().mean().view(1, 1, 1, 1)
+        return input.var(dim=0, keepdim=True).add(1e-8).sqrt().mean([1, 2, 3], keepdim=True)
 
     def forward(self, input, x=None):
         if x is None:
@@ -140,7 +139,7 @@ class Discriminator(nn.Module):
             y0 = self.blocks[i](y0)
             y0 = F.avg_pool2d(y0, kernel_size=2, stride=2)
 
-        y = self.blocks[0](torch.cat((y0, self.minibatchstd(y0).expand_as(y0[:, 0].unsqueeze(1))), dim=1))
+        y = self.blocks[0](torch.cat((y0, self.minibatchstd(y0).expand_as(y0[:, 0:1])), dim=1))
 
         return y.squeeze()
 
