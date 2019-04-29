@@ -64,6 +64,7 @@ class Progress:
 
         assert n_iter > 0 and isinstance(n_iter, int), 'n_iter must be int >= 1'
         assert pmax >= 0 and isinstance(pmax, int), 'pmax must be int >= 0'
+        batch_sizes = list(map(int, batch_sizes))
         assert isinstance(batch_sizes, list) and \
                all(isinstance(x, int) for x in batch_sizes) and \
                all(x > 0 for x in batch_sizes) and \

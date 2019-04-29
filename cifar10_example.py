@@ -29,7 +29,7 @@ parser.add_argument('--outm', default='Models', help='folder to save models')
 
 parser.add_argument('--epochs', type=int, default=200, help='number of training epochs')
 parser.add_argument('--workers', type=int, default=8, help='number of data loading workers')
-parser.add_argument('--batch-sizes', type=list, default=[16, 16, 16, 16],
+parser.add_argument('--batch-sizes', nargs='*', default=[16, 16, 16, 16],
                     help='list of batch sizes during the training')
 parser.add_argument('--nch', type=int, default=16, help='base number of channel for networks')
 parser.add_argument('--BN', action='store_true', help='use BatchNorm in G and D')
